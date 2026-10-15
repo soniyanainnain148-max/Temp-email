@@ -20,11 +20,13 @@
 <body class="bg-gray-900 text-white min-h-screen font-sans">
 
     <div class="container mx-auto px-4 py-10 max-w-4xl">
+        <!-- Header -->
         <header class="text-center mb-10">
             <h1 class="text-4xl font-bold text-blue-500 mb-2">📧 Unlimited Email Generator</h1>
             <p class="text-gray-400">Temporary emails for free. Developed by Dark GPT.</p>
         </header>
 
+        <!-- Email Display Section -->
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
             <label class="block text-gray-400 text-sm font-bold mb-2">Your Temporary Email:</label>
             <div class="flex gap-2">
@@ -41,6 +43,7 @@
             <div id="loading" class="hidden mt-4 text-center"><div class="loader mx-auto"></div></div>
         </div>
 
+        <!-- Inbox Section -->
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Inbox</h2>
@@ -49,10 +52,12 @@
                 </button>
             </div>
 
+            <!-- Message List -->
             <div id="messageList" class="space-y-2 max-h-60 overflow-y-auto">
                 <p class="text-gray-500 text-center py-4">No messages yet. Waiting for emails...</p>
             </div>
 
+            <!-- Message Viewer (Hidden by default) -->
             <div id="messageViewer" class="hidden mt-6 border-t border-gray-700 pt-4">
                 <h3 id="msgSubject" class="text-lg font-bold text-blue-400"></h3>
                 <p id="msgFrom" class="text-sm text-gray-400 mb-2"></p>
@@ -63,7 +68,8 @@
     </div>
 
     <script>
-        let currentToken = '';
+        let currentLogin = '';
+        let currentDomain = '';
 
         async function generateEmail() {
             const btn = document.getElementById('genBtn');
@@ -72,24 +78,19 @@
             
             btn.disabled = true;
             loading.classList.remove('hidden');
-            display.value = 'Generating...';
             
             try {
                 const res = await fetch('/api/generate');
                 const data = await res.json();
-                
                 if(data.success) {
-                    currentToken = data.token;
-                    display.value = data.email;
+                    const email = data.email;
+                    display.value = email;
+                    [currentLogin, currentDomain] = email.split('@');
                     document.getElementById('messageList').innerHTML = '<p class="text-gray-500 text-center py-4">New email generated. Waiting for messages...</p>';
                     document.getElementById('messageViewer').classList.add('hidden');
-                } else {
-                    alert('Error: ' + data.error);
-                    display.value = '';
                 }
             } catch (err) {
-                alert('Network Error: Server se connect nahi ho pa raha');
-                display.value = '';
+                alert('Error generating email');
             } finally {
                 btn.disabled = false;
                 loading.classList.add('hidden');
@@ -97,13 +98,13 @@
         }
 
         async function checkInbox() {
-            if(!currentToken) return alert('Generate an email first!');
+            if(!currentLogin) return alert('Generate an email first!');
             
             const list = document.getElementById('messageList');
             list.innerHTML = '<div class="loader mx-auto"></div>';
 
             try {
-                const res = await fetch(`/api/inbox?token=${currentToken}`);
+                const res = await fetch(`/api/inbox?login=${currentLogin}&domain=${currentDomain}`);
                 const data = await res.json();
                 
                 if(data.success && data.messages.length > 0) {
@@ -128,7 +129,7 @@
 
         async function readMessage(id) {
             try {
-                const res = await fetch(`/api/read?token=${currentToken}&id=${id}`);
+                const res = await fetch(`/api/read?login=${currentLogin}&domain=${currentDomain}&id=${id}`);
                 const data = await res.json();
                 
                 if(data.success) {
