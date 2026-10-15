@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unlimited Email Generator - Dark GPT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen font-sans">
+
+    <div class="container mx-auto px-4 py-10 max-w-4xl">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-blue-500 mb-2">📧 Unlimited Email Generator</h1>
+            <p class="text-gray-400">Temporary emails for free. Developed by Dark GPT.</p>
+        </header>
+
+        <!-- Email Display Section -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+            <label class="block text-gray-400 text-sm font-bold mb-2">Your Temporary Email:</label>
+            <div class="flex gap-2">
+                <input type="text" id="emailDisplay" readonly 
+                    class="w-full bg-gray-700 text-white p-3 rounded border border-gray-600 focus:outline-none focus:border-blue-500" 
+                    placeholder="Click Generate to get email">
+                <button onclick="copyEmail()" class="bg-blue-600 hover:bg-blue-700 px-4 py-3 rounded font-bold transition">
+                    Copy
+                </button>
+                <button onclick="generateEmail()" id="genBtn" class="bg-green-600 hover:bg-green-700 px-4 py-3 rounded font-bold transition">
+                    Generate
+                </button>
+            </div>
+            <div id="loading" class="hidden mt-4 text-center"><div class="loader mx-auto"></div></div>
+        </div>
+
+        <!-- Inbox Section -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Inbox</h2>
+                <button onclick="checkInbox()" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded text-sm font-bold transition">
+                    Refresh Inbox
+                </button>
+            </div>
+
+            <!-- Message List -->
+            <div id="messageList" class="space-y-2 max-h-60 overflow-y-auto">
+                <p class="text-gray-500 text-center py-4">No messages yet. Waiting for emails...</p>
+            </div>
+
+            <!-- Message Viewer (Hidden by default) -->
+            <div id="messageViewer" class="hidden mt-6 border-t border-gray-700 pt-4">
+                <h3 id="msgSubject" class="text-lg font-bold text-blue-400"></h3>
+                <p id="msgFrom" class="text-sm text-gray-400 mb-2"></p>
+                <div id="msgBody" class="bg-gray-900 p-4 rounded text-gray-300 whitespace-pre-wrap"></div>
+                <button onclick="closeViewer()" class="mt-4 text-red-400 text-sm hover:underline">Close Message</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentLogin = '';
+        let currentDomain = '';
+
+        async function generateEmail() {
+            const btn = document.getElementById('genBtn');
+            const display = document.getElementById('emailDisplay');
+            const loading = document.getElementById('loading');
+            
+            btn.disabled = true;
+            loading.classList.remove('hidden');
+            
+            try {
+                const res = await fetch('/api/generate');
+                const data = await res.json();
+                if(data.success) {
+                    const email = data.email;
+                    display.value = email;
+                    [currentLogin, currentDomain] = email.split('@');
+                    document.getElementById('messageList').innerHTML = '<p class="text-gray-500 text-center py-4">New email generated. Waiting for messages...</p>';
+                    document.getElementById('messageViewer').classList.add('hidden');
+                }
+            } catch (err) {
+                alert('Error generating email');
+            } finally {
+                btn.disabled = false;
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function checkInbox() {
+            if(!currentLogin) return alert('Generate an email first!');
+            
+            const list = document.getElementById('messageList');
+            list.innerHTML = '<div class="loader mx-auto"></div>';
+
+            try {
+                const res = await fetch(`/api/inbox?login=${currentLogin}&domain=${currentDomain}`);
+                const data = await res.json();
+                
+                if(data.success && data.messages.length > 0) {
+                    list.innerHTML = '';
+                    data.messages.forEach(msg => {
+                        const div = document.createElement('div');
+                        div.className = 'bg-gray-700 p-3 rounded cursor-pointer hover:bg-gray-600 flex justify-between items-center';
+                        div.innerHTML = `
+                            <span class="font-bold truncate">${msg.from}</span>
+                            <span class="text-gray-400 text-sm">${msg.subject}</span>
+                        `;
+                        div.onclick = () => readMessage(msg.id);
+                        list.appendChild(div);
+                    });
+                } else {
+                    list.innerHTML = '<p class="text-gray-500 text-center py-4">No messages yet.</p>';
+                }
+            } catch (err) {
+                list.innerHTML = '<p class="text-red-400 text-center">Failed to fetch inbox.</p>';
+            }
+        }
+
+        async function readMessage(id) {
+            try {
+                const res = await fetch(`/api/read?login=${currentLogin}&domain=${currentDomain}&id=${id}`);
+                const data = await res.json();
+                
+                if(data.success) {
+                    document.getElementById('messageList').classList.add('hidden');
+                    document.getElementById('messageViewer').classList.remove('hidden');
+                    
+                    document.getElementById('msgSubject').innerText = data.data.subject;
+                    document.getElementById('msgFrom').innerText = `From: ${data.data.from}`;
+                    document.getElementById('msgBody').innerText = data.data.body;
+                }
+            } catch (err) {
+                alert('Failed to read message');
+            }
+        }
+
+        function closeViewer() {
+            document.getElementById('messageViewer').classList.add('hidden');
+            document.getElementById('messageList').classList.remove('hidden');
+        }
+
+        function copyEmail() {
+            const copyText = document.getElementById("emailDisplay");
+            copyText.select();
+            document.execCommand("copy");
+            alert("Email copied to clipboard!");
+        }
+    </script>
+</body>
+</html>
